@@ -1,0 +1,12 @@
+appname=unasfan_fpk
+version=1.1.1
+display_name=U-NAS Fan Control
+desc="""<p>移植 U-NAS 的风扇控制程序，根据 CPU 温度自动调节风扇转速。</p><p><strong>仅支持万由 HS201P、HS401P 机型。</strong>本应用针对对应主板的 Super I/O 控制器，其他硬件请勿安装或使用。</p>"""
+platform=x86
+source=thirdparty
+maintainer=U-NAS migration
+distributor=local
+ctl_stop=true
+checkport=false
+disable_authorization_path=true
+changelog=移除 I2C 后备模式，固定使用静态编译的 Rust Super I/O 三通道控制路径，兼容 glibc 2.36。

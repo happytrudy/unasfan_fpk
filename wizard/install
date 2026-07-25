@@ -1,0 +1,32 @@
+[
+  {
+    "stepTitle": "风扇控制设置",
+    "items": [
+      {
+        "type": "text",
+        "field": "temp_path",
+        "label": "CPU 温度路径",
+        "rules": [{"required": true, "message": "请填写温度路径"}],
+        "options": [],
+        "initValue": "/sys/class/thermal/thermal_zone1/temp"
+      },
+      {
+        "type": "text",
+        "field": "poll_seconds",
+        "label": "轮询间隔（秒）",
+        "rules": [{"required": true, "message": "请填写轮询间隔"}],
+        "options": [],
+        "initValue": "10"
+      },
+      {
+        "type": "text",
+        "field": "idle_percent",
+        "label": "低温最低转速（%）",
+        "rules": [{"required": true, "message": "请填写最低转速"}],
+        "options": [],
+        "helpText": "建议保持 31，避免风扇完全停转",
+        "initValue": "31"
+      }
+    ]
+  }
+]
