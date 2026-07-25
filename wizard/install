@@ -12,6 +12,15 @@
       },
       {
         "type": "text",
+        "field": "disk_temp_path",
+        "label": "硬盘温度路径（可选）",
+        "rules": [],
+        "options": [],
+        "helpText": "留空时自动读取 drivetemp/nvme hwmon 传感器；无法自动识别时填写 temp*_input 路径",
+        "initValue": ""
+      },
+      {
+        "type": "text",
         "field": "poll_seconds",
         "label": "轮询间隔（秒）",
         "rules": [{"required": true, "message": "请填写轮询间隔"}],

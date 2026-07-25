@@ -42,6 +42,33 @@ fn read_temp(path: &str) -> Option<i32> {
     Some(if raw > 200 { (raw / 1000) as i32 } else { raw as i32 })
 }
 
+fn read_disk_temp() -> Option<i32> {
+    let mut maximum = None;
+    let entries = fs::read_dir("/sys/class/hwmon").ok()?;
+    for entry in entries.flatten() {
+        let hwmon = entry.path();
+        let name = fs::read_to_string(hwmon.join("name")).unwrap_or_default().trim().to_ascii_lowercase();
+        if !(name.contains("drivetemp") || name.contains("nvme")) {
+            continue;
+        }
+        let sensors = match fs::read_dir(&hwmon) {
+            Ok(sensors) => sensors,
+            Err(_) => continue,
+        };
+        for sensor in sensors.flatten() {
+            let file_name = sensor.file_name();
+            let file_name = file_name.to_string_lossy();
+            if !file_name.starts_with("temp") || !file_name.ends_with("_input") {
+                continue;
+            }
+            if let Some(temp) = read_temp(sensor.path().to_string_lossy().as_ref()) {
+                maximum = Some(maximum.map_or(temp, |current: i32| current.max(temp)));
+            }
+        }
+    }
+    maximum
+}
+
 fn clamp_pwm(value: i32) -> u8 {
     value.clamp(50, 250) as u8
 }
@@ -68,7 +95,7 @@ fn main() {
         signal(15, stop_handler);
     }
     let temp_path = env_or("temp_path", "/sys/class/thermal/thermal_zone1/temp");
-    let disk_temp_path = env::var("disk_temp_path").ok();
+    let disk_temp_path = env::var("disk_temp_path").ok().filter(|path| !path.trim().is_empty());
     let poll_seconds = env_or("poll_seconds", "10").parse::<u64>().unwrap_or(10).max(1);
     let idle = env_or("idle_percent", "31").parse::<i32>().unwrap_or(31).clamp(0, 100);
     let appdest = env_or("TRIM_APPDEST", ".");
@@ -79,7 +106,7 @@ fn main() {
     log_line(&log_path, &format!("Rust fan daemon started: backend=superio, temp={temp_path}, poll={poll_seconds}s, idle={idle}%"));
     while !STOP.load(Ordering::Relaxed) {
         let cpu = read_temp(&temp_path);
-        let disk = disk_temp_path.as_deref().and_then(read_temp);
+        let disk = disk_temp_path.as_deref().and_then(read_temp).or_else(read_disk_temp);
         let temp = match (cpu, disk) {
             (Some(cpu), Some(disk)) => cpu.max(disk),
             (Some(cpu), None) => cpu,
