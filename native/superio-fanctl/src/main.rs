@@ -35,7 +35,9 @@ fn usage() {
 }
 
 fn parse_u8(value: &str, name: &str) -> Result<u8, String> {
-    let parsed = value.parse::<u16>().map_err(|_| format!("invalid {name}: {value}"))?;
+    let parsed = value
+        .parse::<u16>()
+        .map_err(|_| format!("invalid {name}: {value}"))?;
     u8::try_from(parsed).map_err(|_| format!("{name} must be 0..255"))
 }
 

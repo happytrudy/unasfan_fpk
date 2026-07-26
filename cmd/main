@@ -7,7 +7,6 @@ LOG_FILE="${TRIM_PKGVAR}/fancontrol.log"
 PID_FILE="${TRIM_PKGVAR}/fancontrol.pid"
 TEMP_PATH="${temp_path:-/sys/class/thermal/thermal_zone1/temp}"
 POLL_SECONDS="${poll_seconds:-10}"
-IDLE_PERCENT="${idle_percent:-31}"
 SCRIPT_PATH=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
 
 log_msg() {
@@ -32,79 +31,12 @@ status() {
     kill -0 "${current_pid}" 2>/dev/null
 }
 
-set_pwm() {
-    local pwm="$1"
-    if [ "${pwm}" -lt 50 ]; then pwm=50; fi
-    if [ "${pwm}" -gt 250 ]; then pwm=250; fi
-    log_msg "Setting fan PWM to ${pwm} via superio"
-    if ! "${SUPERIO_BIN}" --value "${pwm}" --channel all >>"${LOG_FILE}" 2>&1; then
-        log_msg "Super I/O write failed at PWM ${pwm}"
-        return 1
-    fi
-}
-
-percent_for_temp() {
-    local temp="$1"
-    if [ "${temp}" -ge 80 ]; then
-        printf '100\n'
-    elif [ "${temp}" -ge 75 ]; then
-        printf '55\n'
-    elif [ "${temp}" -ge 65 ]; then
-        printf '39\n'
-    elif [ "${temp}" -ge 55 ]; then
-        printf '31\n'
-    else
-        printf '%s\n' "${IDLE_PERCENT}"
-    fi
-}
-
-percent_to_pwm() {
-    local pwm
-    pwm=$((($1 * 254) / 100))
-    if [ "${pwm}" -lt 50 ]; then pwm=50; fi
-    if [ "${pwm}" -gt 250 ]; then pwm=250; fi
-    printf '%s\n' "${pwm}"
-}
-
-daemon_loop() {
-    local raw temp percent pwm last_pwm=-1
-    trap 'set_pwm 250; log_msg "Fan control stopped; fail-safe PWM applied"; exit 0' TERM INT
-
-    log_msg "Fan control started: backend=superio, temp=${TEMP_PATH}, poll=${POLL_SECONDS}s, idle=${IDLE_PERCENT}%"
-    while :; do
-        raw=$(cat "${TEMP_PATH}" 2>/dev/null || true)
-        if valid_number "${raw}"; then
-            if [ "${raw}" -gt 200 ]; then
-                temp=$((raw / 1000))
-            else
-                temp=${raw}
-            fi
-            percent=$(percent_for_temp "${temp}")
-            pwm=$(percent_to_pwm "${percent}")
-            if [ "${pwm}" != "${last_pwm}" ]; then
-                log_msg "CPU temperature ${temp}C -> ${percent}% -> PWM ${pwm}"
-                set_pwm "${pwm}" || log_msg "Fan write failed; retaining requested PWM ${pwm}"
-                last_pwm=${pwm}
-            fi
-        else
-            if [ "${last_pwm}" != "250" ]; then
-                log_msg "Cannot read CPU temperature from ${TEMP_PATH}; applying fail-safe PWM"
-                set_pwm 250
-                last_pwm=250
-            fi
-        fi
-        sleep "${POLL_SECONDS}"
-    done
-}
-
 start_process() {
     status && return 0
     valid_number "${POLL_SECONDS}" || { log_msg 'Invalid poll_seconds'; return 1; }
     [ "${POLL_SECONDS}" -ge 1 ] || { log_msg 'poll_seconds must be at least 1'; return 1; }
     [ -x "${SUPERIO_BIN}" ] || { log_msg "Helper not found: ${SUPERIO_BIN}"; return 1; }
     [ -x "${DAEMON_BIN}" ] || { log_msg "Daemon not found: ${DAEMON_BIN}"; return 1; }
-    valid_number "${IDLE_PERCENT}" || { log_msg 'Invalid idle_percent'; return 1; }
-    [ "${IDLE_PERCENT}" -le 100 ] || { log_msg 'idle_percent must be 0..100'; return 1; }
     [ -r "${TEMP_PATH}" ] || { log_msg "Temperature path not readable: ${TEMP_PATH}"; return 1; }
     mkdir -p "${TRIM_PKGVAR}"
     nohup "${SCRIPT_PATH}" --daemon >>"${LOG_FILE}" 2>&1 </dev/null &

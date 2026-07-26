@@ -26,15 +26,6 @@
         "rules": [{"required": true, "message": "请填写轮询间隔"}],
         "options": [],
         "initValue": "10"
-      },
-      {
-        "type": "text",
-        "field": "idle_percent",
-        "label": "低温最低转速（%）",
-        "rules": [{"required": true, "message": "请填写最低转速"}],
-        "options": [],
-        "helpText": "建议保持 31，避免风扇完全停转",
-        "initValue": "31"
       }
     ]
   }
