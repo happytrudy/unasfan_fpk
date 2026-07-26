@@ -1,7 +1,7 @@
 appname=unasfan_fpk
-version=1.5.0
+version=1.6.0
 display_name=U-NAS Fan Control
-desc="""<p>移植 U-NAS 的风扇控制程序，根据 CPU 温度自动调节风扇转速。</p><p><strong>仅支持万由 HS201P、HS401P 机型。</strong>本应用针对对应主板的 Super I/O 控制器，其他硬件请勿安装或使用。</p>"""
+desc="""<p>移植 U-NAS 官方风扇控制程序，根据 CPU 和硬盘温度自动调节风扇转速。</p><p><strong>仅支持万由 HS201P、HS401P 机型。</strong>本应用使用对应主板的 I801 I2C 风扇控制器，其他硬件请勿安装或使用。</p>"""
 platform=x86
 source=thirdparty
 maintainer=U-NAS migration
@@ -9,4 +9,4 @@ distributor=local
 ctl_stop=true
 checkport=false
 disable_authorization_path=true
-changelog=按反编译的 U-NAS WY2Hardware 温度语义和 wygpio aiFanSpeed 状态机实现；使用内核 hwmon/sysfs 直接读取 CPU 与硬盘温度，不依赖 fdisk、smartctl 或 i2c-tools。
+changelog=使用官方 wygpio 的 I801 I2C 后端；根据 HS401P 实测结果移除 Super I/O 写入路径，仅保留 I2C 0xf0 自动调速和只读诊断；按反编译的温度语义和 aiFanSpeed 状态机调度。

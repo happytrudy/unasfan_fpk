@@ -1,12 +1,12 @@
 #!/bin/bash
 set -u
 
-SUPERIO_BIN="${TRIM_APPDEST}/bin/superio-fanctl"
+FANCTL_BIN="${TRIM_APPDEST}/bin/superio-fanctl"
 DAEMON_BIN="${TRIM_APPDEST}/bin/fan-daemon"
 LOG_FILE="${TRIM_PKGVAR}/fancontrol.log"
 PID_FILE="${TRIM_PKGVAR}/fancontrol.pid"
 TEMP_PATH="${temp_path:-/sys/class/thermal/thermal_zone1/temp}"
-POLL_SECONDS="${poll_seconds:-10}"
+POLL_SECONDS="${poll_seconds:-2}"
 SCRIPT_PATH=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
 
 log_msg() {
@@ -31,15 +31,27 @@ status() {
     kill -0 "${current_pid}" 2>/dev/null
 }
 
+ensure_i2c_dev() {
+    [ -d /sys/class/i2c-dev ] && return 0
+    if command -v modprobe >/dev/null 2>&1; then
+        modprobe i2c-dev >/dev/null 2>&1 || true
+    fi
+    [ -d /sys/class/i2c-dev ] || {
+        log_msg 'i2c-dev is unavailable; official I801 fan control cannot start'
+        return 1
+    }
+}
+
 start_process() {
     status && return 0
     valid_number "${POLL_SECONDS}" || { log_msg 'Invalid poll_seconds'; return 1; }
     [ "${POLL_SECONDS}" -ge 1 ] || { log_msg 'poll_seconds must be at least 1'; return 1; }
-    [ -x "${SUPERIO_BIN}" ] || { log_msg "Helper not found: ${SUPERIO_BIN}"; return 1; }
+    [ -x "${FANCTL_BIN}" ] || { log_msg "Fan controller not found: ${FANCTL_BIN}"; return 1; }
     [ -x "${DAEMON_BIN}" ] || { log_msg "Daemon not found: ${DAEMON_BIN}"; return 1; }
     [ -r "${TEMP_PATH}" ] || { log_msg "Temperature path not readable: ${TEMP_PATH}"; return 1; }
+    ensure_i2c_dev || return 1
     mkdir -p "${TRIM_PKGVAR}"
-    nohup "${SCRIPT_PATH}" --daemon >>"${LOG_FILE}" 2>&1 </dev/null &
+    nohup "${SCRIPT_PATH}" --daemon >/dev/null 2>&1 </dev/null &
     printf '%s\n' "$!" >"${PID_FILE}"
     sleep 1
     status || { rm -f "${PID_FILE}"; log_msg 'Fan control exited immediately'; return 1; }

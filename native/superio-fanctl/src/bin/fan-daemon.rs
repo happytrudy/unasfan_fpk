@@ -293,8 +293,20 @@ impl OfficialController {
 }
 
 fn write_pwm(appdest: &str, pwm: u8) -> bool {
-    Command::new(format!("{appdest}/bin/superio-fanctl"))
-        .args(["--value", &pwm.to_string(), "--channel", "all"])
+    let mut command = Command::new(format!("{appdest}/bin/superio-fanctl"));
+    command.args([
+        "--value",
+        &pwm.to_string(),
+        "--i2c-only",
+        "--channel",
+        "all",
+        "--bus",
+        "auto",
+    ]);
+    if pwm >= 250 {
+        command.arg("--legacy-max");
+    }
+    command
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
@@ -309,7 +321,7 @@ fn main() {
     let disk_temp_path = env::var("disk_temp_path")
         .ok()
         .filter(|path| !path.trim().is_empty());
-    let poll_seconds = env_or("poll_seconds", "10")
+    let poll_seconds = env_or("poll_seconds", "2")
         .parse::<u64>()
         .unwrap_or(10)
         .max(1);
@@ -318,7 +330,7 @@ fn main() {
     let mut last_pwm: Option<u8> = None;
     let mut controller = OfficialController::new();
 
-    log_line(&log_path, &format!("Rust fan daemon started: backend=superio, algorithm=wygpio-exact, temp={temp_path}, poll={poll_seconds}s"));
+    log_line(&log_path, &format!("Rust fan daemon started: backend=i2c-i801, address=0x54/register=0xf0, algorithm=wygpio-exact, temp={temp_path}, poll={poll_seconds}s"));
     while !STOP.load(Ordering::Relaxed) {
         let cpu = read_cpu_temp_official().or_else(|| read_temp(&temp_path));
         let disk = disk_temp_path
@@ -335,9 +347,12 @@ fn main() {
                         &log_path,
                         "Temperature read failed; applying fail-safe PWM 250",
                     );
-                    let _ = write_pwm(&appdest, 250);
-                    last_pwm = Some(250);
                 }
+                // The original alarm handler writes the selected value on every
+                // interval, even when it has not changed. This also prevents an EC
+                // or firmware policy from silently replacing the requested PWM.
+                let _ = write_pwm(&appdest, 250);
+                last_pwm = Some(250);
                 thread::sleep(Duration::from_secs(poll_seconds));
                 continue;
             }
@@ -345,11 +360,11 @@ fn main() {
         let (state, pwm, effective) = controller.update(cpu, disk);
         if last_pwm != Some(pwm) {
             log_line(&log_path, &format!("temperature cpu={cpu:.1} disk={disk:.1} effective={effective:.1}C average={:.1}C state={state} raw_pwm={} -> PWM {pwm}", controller.average_temp, controller.current_pwm));
-            if !write_pwm(&appdest, pwm) {
-                log_line(&log_path, &format!("Fan write failed at PWM {pwm}"));
-            }
-            last_pwm = Some(pwm);
         }
+        if !write_pwm(&appdest, pwm) {
+            log_line(&log_path, &format!("Fan write failed at PWM {pwm}"));
+        }
+        last_pwm = Some(pwm);
         thread::sleep(Duration::from_secs(poll_seconds));
     }
     let _ = write_pwm(&appdest, 250);
